@@ -1,6 +1,7 @@
-# genomics_tools
+# blast_tools
 
-a repository for random scripts that are useful in dealing with genomic data.
+usage:
+1. `blast_db.py`
+2. `get_hits.py`
 
-includes:
-- blast_tools (blastn and tblastx)
+`BLAST_wrapper.py` should, theoretically, wrap these two scripts together. It does not do that yet.

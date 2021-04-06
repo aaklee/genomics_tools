@@ -14,8 +14,10 @@ def generate_contig_hits(blastresults, evalf, lenf, total_num, pull):
     
     dup_hits = []
     to_retrieve = {}
+    retrieve_dict = {}
+    retrieve_list = []
 
-    num_ct = 0
+    num_ct = 1
     curr_qseqid = ''
     for hit in hits.itertuples():
         evalue = float(hit.evalue)
@@ -26,60 +28,75 @@ def generate_contig_hits(blastresults, evalf, lenf, total_num, pull):
         qlen = int(hit.qlen)
         
         # only include a certain number of blast hits per query sequence
-        if num_ct == 0:
-            curr_qseqid = qseqid
+        if total_num:
+            if num_ct == 1:
+                curr_qseqid = qseqid
             
-        if total_num and num_ct == total_num:
-            if curr_qseqid == qseqid:
+            elif num_ct > total_num:
+                if curr_qseqid != qseqid:
+                    num_ct = 1
+                    pass
+                    
                 continue
-            elif curr_qseqid != qseqid:
-                num_ct = 0
-                pass
+
         
-        # evalue filter
+        # e-value filter
         if evalf:
             if evalue > evalf:
                 pass
             else:
                 continue
-            
-        # add hit to to_retrieve dictionary
-        if sseqid not in to_retrieve.keys():
-            to_retrieve[sseqid] = []
-        else:
-            dup_hits.append(sseqid)
-            
-        # get positions of hit sequence
-        if send > sstart:
+
+        # check whether fwd or rev hit
+        fwd = True
+        if send < sstart:
+            fwd = False
+
+        # add positions of hit sequence
+        if fwd:
             send = send + pull
             sstart = sstart - pull
             if sstart < 0:
                 sstart = 0
             
-            # do not include if does not meet length requirement
-            if lenf:
-                if (send - sstart) > lenf:
-                    pass
-                else:
-                    continue
+            if lenf and (send - sstart) < lenf:
+                continue
+
+            sub_sseqid = '{}_{}-{}'.format(sseqid, sstart, send)
+            if sseqid not in to_retrieve.keys():
+                to_retrieve[sseqid] = []
+            else:
+                dup_hits.append(sseqid)
+            
+            if sub_sseqid not in retrieve_dict.keys():
+                retrieve_dict[sub_sseqid] = []
 
             to_retrieve[sseqid].append((sstart, send, qseqid))
+            retrieve_dict[sub_sseqid].append(qseqid)
+            retrieve_list.append(sub_sseqid)
             num_ct += 1
             
-        elif send < sstart:
+        elif not fwd:
             send = send - pull
             sstart = sstart + pull
             if send < 0:
                 send = 0
 
-            # do not include if does not meet length requirement
-            if lenf:
-                if (sstart - send) > lenf:
-                    pass
-                else:
-                    continue
+            if lenf and (sstart - send) < lenf:
+                continue
+
+            sub_sseqid = '{}_{}-{}'.format(sseqid, send, sstart)
+            if sseqid not in to_retrieve.keys():
+                to_retrieve[sseqid] = []
+            else:
+                dup_hits.append(sseqid)
+
+            if sub_sseqid not in retrieve_dict.keys():
+                retrieve_dict[sub_sseqid] = []
 
             to_retrieve[sseqid].append((send, sstart, qseqid))
+            retrieve_dict[sub_sseqid].append(qseqid)
+            retrieve_list.append(sub_sseqid)
             num_ct += 1
         
 
@@ -94,22 +111,25 @@ def generate_contig_hits(blastresults, evalf, lenf, total_num, pull):
                     direction = 'plus'
                     outf.write('%s %i-%i %s\n' % (hit, pos[0], pos[1], direction))
                     
-    return to_retrieve
+    return to_retrieve, retrieve_dict, retrieve_list
     
     
     
     
-def append_query_sequences(to_retrieve, csv):
+def append_query_sequences(to_retrieve, retrieve_list, retrieve_dict, csv):
     fasta = []
     try:
+        ct = 0
         with open('%s_hits.out' % csv, 'r') as inf:
             for record in SeqIO.parse(inf, 'fasta'):
-                new_desc = [i[2] for i in to_retrieve[record.id]]
+                #new_desc = [i[2] for i in to_retrieve[record.id]]
+                new_desc = retrieve_dict[retrieve_list[ct]]
             
                 record.id = record.description.replace(' ', '_')
                 record.description = ' '.join(new_desc)
                 
                 fasta.append(record)
+                ct += 1
 
     except FileNotFoundError as e:
         print("Is blast+ in the PATH?")
@@ -135,7 +155,7 @@ def main():
     parser.add_argument('-r', '--results', help='BLAST results in csv format')
     parser.add_argument('-p', '--pull', default=500, help='bps to pull up/downstream of the BLAST result (default=500 bp)')
     parser.add_argument('-l', '--len', help='len filter')
-    parser.add_argument('-e', '--eval', help='eval filter (float)')
+    parser.add_argument('-e', '--eval', help='e-val filter (float)')
     parser.add_argument('-n', '--total_num', help='number of blast hits to get')
 
     # parse arguments
@@ -166,12 +186,16 @@ def main():
         total_num = False
 
     # generate contig_hits.txt intermediate file with information needed to retrieve hits from blastdb
-    to_retrieve = generate_contig_hits(blastresults, evalf, lenf, total_num, pull)
+    print('generate contig_hits.txt')
+    to_retrieve, retrieve_dict, retrieve_list = generate_contig_hits(blastresults, evalf, lenf, total_num, pull)
+    print('generate contig_hits.txt COMPLETE\n')
 
+    print('recover blast hits')
     os.system('blastdbcmd -db %s -entry_batch contig_hits.txt -outfmt %s -out %s_hits.out' % (blastdb, '%f', csv))
+    print('recover blast hits COMPLETE\n')
 
     # append query sequences for each hit to produce final hits file
-    append_query_sequences(to_retrieve, csv)
+    append_query_sequences(to_retrieve, retrieve_list, retrieve_dict, csv)
 
 
 
