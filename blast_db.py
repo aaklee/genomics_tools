@@ -14,7 +14,7 @@ INPUTS (REQUIRED):
     -csv        t/f             default: false
                                 Format output as a CSV file (probably should have used -parse_seqids
                                 when running makeblastdb)
-    -search     blastn, tblastx only supports
+    -search     blastn,tblastx,blastx
 
 
 """
@@ -28,11 +28,11 @@ def blast(search, database, query, outfmt):
     q = query.split('/')[-1]
     db = database.split('/')[-1]
     if outfmt:
-        print('{} -db {} -query {} -out {}.{}.blastn.csv -outfmt \"10 qseqid sseqid pident qlen length mismatch gapopen qstart qend sstart send evalue bitscore\"'.format(search, database, query, db, q))
-        os.system('{} -db {} -query {} -out {}.{}.blastn.csv -outfmt \"10 qseqid sseqid pident qlen length mismatch gapopen qstart qend sstart send evalue bitscore\"'.format(search, database, query, db, q))
+        print('{} -db {} -query {} -out {}.{}.{}.csv -outfmt \"10 qseqid sseqid pident qlen length mismatch gapopen qstart qend sstart send evalue bitscore\"'.format(search, database, query, db, search, q))
+        os.system('{} -db {} -query {} -out {}.{}.{}.csv -outfmt \"10 qseqid sseqid pident qlen length mismatch gapopen qstart qend sstart send evalue bitscore\"'.format(search, database, query, db, search, q))
     else:
-        print('{} -db {} -query {} -out {}.{}.blastn.out'.format(search, database, query, db, q))
-        os.system('{} -db {} -query {} -out {}.{}.blastn.out'.format(search, database, query, db, q))
+        print('{} -db {} -query {} -out {}.{}.{}.out'.format(search, database, query, db, search, q))
+        os.system('{} -db {} -query {} -out {}.{}.{}.out'.format(search, database, query, db, search, q))
 
 
 
@@ -59,7 +59,7 @@ def main():
     parser.add_argument('-l', '--database_list', help='comma-separated list of paths to BLASTable databases, do not use with -db/-dbf')
     parser.add_argument('-f', '--database_file', help='file containing list of paths to BLASTable databases, do not use with -db/-dbl')
     parser.add_argument('-q', '--query', help='FASTA formatted list of query sequences', required=True)
-    parser.add_argument('-s', '--search', help='blastn or tblastx', required=True)
+    parser.add_argument('-s', '--search', help='blastn,blastx,tblastx', required=True)
     parser.add_argument('-c', '--csv', action='store_true', help='format output as a CSV file; -parse_seqids in makeblastdb!!')
 
 
